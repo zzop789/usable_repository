@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-current",
+            "type": "shell",
+            "command": "${workspaceFolder}\\.vscode\\build-current.cmd",
+            "args": [
+                "${file}",
+                "${workspaceFolder}\\bin\\${fileDirnameBasename}.exe"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": ["$gcc", "$msCompile"],
+            "detail": "自动构建当前 .cpp：优先 g++，若缺失则自动回退到 MSVC cl.exe"
+        }
+    ]
+}

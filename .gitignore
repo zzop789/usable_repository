@@ -1,0 +1,21 @@
+# 编译输出目录
+bin/*.exe
+bin/*.obj
+bin/*.pdb
+bin/*.ilk
+
+# C# WPF 工具构建产物
+tools/AlgoRunner/bin/
+tools/AlgoRunner/obj/
+
+# VS Code 本地缓存
+.vscode/*.db
+.vscode/ipch/
+
+# VS Code 本机专属 C/C++ 配置
+.vscode/c_cpp_properties.json
+
+# 临时文件
+*.user
+*.suo
+.vs/
