@@ -7,6 +7,7 @@ using System.Windows.Media;
 using AlgoRunner.Models;
 using AlgoRunner.Services;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace AlgoRunner
 {
@@ -42,35 +43,55 @@ namespace AlgoRunner
         }
 
         // ── Startup ──────────────────────────────────────────────────────────────
-        private void OnLoaded(object sender, RoutedEventArgs e)
+        private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            var startupTimer = Stopwatch.StartNew();
+
             // Initialize output document
             OutputBox.Document.PagePadding = new Thickness(0);
             OutputBox.Document.PageWidth   = 8000;
 
-            // Detect compiler
-            _compiler.Detect();
-            UpdateCompilerLabel();
-
-            // Scan workspace
-            _scanner.Scan();
+            StatusLabel.Text = "启动中...";
+            CompilerLabel.Text = "检测中...";
+            FileCountLabel.Text = "扫描中...";
             _scanner.WorkspaceChanged += OnWorkspaceChanged;
-            RefreshTreeView();
 
             AppendLine($"[AlgoRunner 已启动]  工作区: {WorkspaceRoot}", Colors.DimGray);
-            AppendLine($"编译器: {_compiler.ActiveCompiler.DisplayName}", Colors.DimGray);
-            if (_compiler.ActiveCompiler.Type == CompilerType.None)
+            AppendLine("正在后台检测编译器并扫描项目...", Colors.DimGray);
+            AppendLine("", Colors.White);
+
+            var detectCompilerTask = Task.Run(() =>
+            {
+                _compiler.Detect();
+                return _compiler.ActiveCompiler;
+            });
+
+            var scanWorkspaceTask = Task.Run(() => _scanner.ScanSnapshot());
+
+            var detectedCompiler = await detectCompilerTask;
+            UpdateCompilerLabel();
+
+            var nodes = await scanWorkspaceTask;
+            _scanner.ApplyNodes(nodes);
+            _scanner.EnsureWatching();
+            RefreshTreeView();
+
+            AppendLine($"编译器: {detectedCompiler.DisplayName}", Colors.DimGray);
+            if (detectedCompiler.Type == CompilerType.None)
                 AppendLine("  → 未检测到 g++ 或 cl.exe，请点击右上角 [···] 手动指定",
                     Color.FromRgb(0xFF, 0xA5, 0x00));
+            AppendLine($"启动完成，用时: {startupTimer.ElapsedMilliseconds} ms", Colors.DimGray);
             AppendLine("", Colors.White);
         }
 
         // ── File tree ────────────────────────────────────────────────────────────
         private void OnWorkspaceChanged()
         {
-            Dispatcher.Invoke(() =>
+            _ = Dispatcher.InvokeAsync(async () =>
             {
-                _scanner.Scan();
+                StatusLabel.Text = "刷新项目树...";
+                var nodes = await Task.Run(() => _scanner.ScanSnapshot());
+                _scanner.ApplyNodes(nodes);
                 RefreshTreeView();
             });
         }
@@ -80,25 +101,92 @@ namespace AlgoRunner
             var search = SearchBox.Text.Trim().ToLowerInvariant();
 
             IEnumerable<DirectoryNode> source = string.IsNullOrEmpty(search)
-                ? _scanner.Nodes
+                ? _scanner.Nodes.Select(CloneDirectoryNode)
                 : _scanner.Nodes
-                    .Select(n => new DirectoryNode
-                    {
-                        Name     = n.Name,
-                        FullPath = n.FullPath,
-                        Files    = new ObservableCollection<CppFile>(
-                            n.Files.Where(f => f.DisplayName.ToLowerInvariant().Contains(search)))
-                    })
-                    .Where(n => n.Files.Count > 0);
+                    .Select(n => FilterDirectoryNode(n, search))
+                    .OfType<DirectoryNode>();
 
             FileTree.ItemsSource = source.ToList();
 
-            var total = _scanner.Nodes.Sum(n => n.Files.Count);
+            var total = _scanner.Nodes.Sum(n => n.Algorithms.Sum(a => a.Files.Count));
             FileCountLabel.Text = string.IsNullOrEmpty(search)
                 ? $"共 {total} 个文件  "
-                : $"匹配 {source.Sum(n => n.Files.Count)}/{total}  ";
+                : $"匹配 {source.Sum(n => n.Algorithms.Sum(a => a.Files.Count))}/{total}  ";
 
             StatusLabel.Text = "就绪";
+        }
+
+        private static DirectoryNode CloneDirectoryNode(DirectoryNode source)
+        {
+            return new DirectoryNode
+            {
+                Name       = source.Name,
+                FullPath   = source.FullPath,
+                Algorithms = new ObservableCollection<AlgorithmNode>(
+                    source.Algorithms.Select(CloneAlgorithmNode))
+            };
+        }
+
+        private static DirectoryNode? FilterDirectoryNode(DirectoryNode source, string search)
+        {
+            var algorithms = source.Algorithms
+                .Select(a => FilterAlgorithmNode(a, search))
+                .Where(a => a is not null)
+                .Cast<AlgorithmNode>()
+                .ToList();
+
+            if (algorithms.Count == 0) return null;
+
+            return new DirectoryNode
+            {
+                Name       = source.Name,
+                FullPath   = source.FullPath,
+                Algorithms = new ObservableCollection<AlgorithmNode>(algorithms)
+            };
+        }
+
+        private static AlgorithmNode CloneAlgorithmNode(AlgorithmNode source)
+        {
+            return new AlgorithmNode
+            {
+                Name     = source.Name,
+                FullPath = source.FullPath,
+                Files    = new ObservableCollection<CppFile>(source.Files.Select(CloneCppFile))
+            };
+        }
+
+        private static AlgorithmNode? FilterAlgorithmNode(AlgorithmNode source, string search)
+        {
+            var matchesAlgorithm = source.Name.Contains(search, StringComparison.OrdinalIgnoreCase);
+            var files = source.Files
+                .Where(f => matchesAlgorithm || FileMatchesSearch(f, search))
+                .Select(CloneCppFile)
+                .ToList();
+
+            if (files.Count == 0) return null;
+
+            return new AlgorithmNode
+            {
+                Name     = source.Name,
+                FullPath = source.FullPath,
+                Files    = new ObservableCollection<CppFile>(files)
+            };
+        }
+
+        private static bool FileMatchesSearch(CppFile file, string search)
+        {
+            return file.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || file.FilePath.Contains(search, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static CppFile CloneCppFile(CppFile source)
+        {
+            return new CppFile
+            {
+                FilePath    = source.FilePath,
+                DisplayName = source.DisplayName,
+                Category    = source.Category
+            };
         }
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)

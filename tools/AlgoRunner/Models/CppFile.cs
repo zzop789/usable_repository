@@ -3,6 +3,13 @@ using System.ComponentModel;
 
 namespace AlgoRunner.Models
 {
+    public class AlgorithmNode
+    {
+        public string Name { get; set; } = "";
+        public string FullPath { get; set; } = "";
+        public ObservableCollection<CppFile> Files { get; set; } = new();
+    }
+
     public class CppFile : INotifyPropertyChanged
     {
         private string _displayName = "";
@@ -26,6 +33,6 @@ namespace AlgoRunner.Models
     {
         public string Name { get; set; } = "";
         public string FullPath { get; set; } = "";
-        public ObservableCollection<CppFile> Files { get; set; } = new();
+        public ObservableCollection<AlgorithmNode> Algorithms { get; set; } = new();
     }
 }

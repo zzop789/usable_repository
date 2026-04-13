@@ -15,8 +15,8 @@ namespace AlgoRunner.Services
 
         public string DisplayName => Type switch
         {
-            CompilerType.GppMinGW => $"g++ {Version}",
-            CompilerType.Msvc     => $"cl.exe {Version}",
+            CompilerType.GppMinGW => string.IsNullOrWhiteSpace(Version) ? "g++" : $"g++ {Version}",
+            CompilerType.Msvc     => string.IsNullOrWhiteSpace(Version) ? "cl.exe" : $"cl.exe {Version}",
             _                     => "未检测到编译器"
         };
     }
@@ -50,7 +50,11 @@ namespace AlgoRunner.Services
             var fromPath = TryWhich("g++");
             if (fromPath is not null)
             {
-                DetectedCompiler = BuildGppInfo(fromPath);
+                DetectedCompiler = new CompilerInfo
+                {
+                    Type = CompilerType.GppMinGW,
+                    Path = fromPath
+                };
                 return;
             }
 
@@ -59,7 +63,11 @@ namespace AlgoRunner.Services
             {
                 if (File.Exists(p))
                 {
-                    DetectedCompiler = BuildGppInfo(p);
+                    DetectedCompiler = new CompilerInfo
+                    {
+                        Type = CompilerType.GppMinGW,
+                        Path = p
+                    };
                     return;
                 }
             }
@@ -70,9 +78,8 @@ namespace AlgoRunner.Services
             {
                 DetectedCompiler = new CompilerInfo
                 {
-                    Type    = CompilerType.Msvc,
-                    Path    = cl,
-                    Version = GetMsvcVersion(cl)
+                    Type = CompilerType.Msvc,
+                    Path = cl
                 };
                 return;
             }
@@ -83,13 +90,16 @@ namespace AlgoRunner.Services
         public void SetOverride(string compilerPath)
         {
             if (compilerPath.EndsWith("g++.exe", StringComparison.OrdinalIgnoreCase))
-                _override = BuildGppInfo(compilerPath);
+                _override = new CompilerInfo
+                {
+                    Type = CompilerType.GppMinGW,
+                    Path = compilerPath
+                };
             else if (compilerPath.EndsWith("cl.exe", StringComparison.OrdinalIgnoreCase))
                 _override = new CompilerInfo
                 {
-                    Type    = CompilerType.Msvc,
-                    Path    = compilerPath,
-                    Version = GetMsvcVersion(compilerPath)
+                    Type = CompilerType.Msvc,
+                    Path = compilerPath
                 };
         }
 
@@ -245,44 +255,6 @@ namespace AlgoRunner.Services
                 return (p.ExitCode == 0 && !string.IsNullOrWhiteSpace(line)) ? line : null;
             }
             catch { return null; }
-        }
-
-        private static CompilerInfo BuildGppInfo(string path)
-        {
-            var version = QueryVersion(path, "--version", line =>
-            {
-                // "g++ (Rev10, Built by MSYS2 project) 13.2.0" → take last token with dot
-                var parts = line.Split(' ');
-                return Array.FindLast(parts, t => t.Contains('.')) ?? "";
-            });
-            return new CompilerInfo { Type = CompilerType.GppMinGW, Path = path, Version = version };
-        }
-
-        private static string GetMsvcVersion(string clPath)
-        {
-            return QueryVersion(clPath, "", line =>
-                line.Contains("Version") ? line.Trim() : "");
-        }
-
-        private static string QueryVersion(string exe, string args, Func<string, string> parse)
-        {
-            try
-            {
-                var psi = new ProcessStartInfo(exe, args)
-                {
-                    RedirectStandardOutput = true,
-                    RedirectStandardError  = true,
-                    UseShellExecute        = false,
-                    CreateNoWindow         = true
-                };
-                using var p = Process.Start(psi)!;
-                var line = p.StandardOutput.ReadLine()
-                        ?? p.StandardError.ReadLine()
-                        ?? "";
-                p.WaitForExit();
-                return parse(line);
-            }
-            catch { return ""; }
         }
 
         private static string? FindClViaVsWhere()

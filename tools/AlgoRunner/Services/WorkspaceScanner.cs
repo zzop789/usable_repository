@@ -22,9 +22,15 @@ namespace AlgoRunner.Services
         /// <summary>扫描工作区，填充 Nodes，并启动 FileSystemWatcher。必须在调用前 Dispose 旧 watcher。</summary>
         public void Scan()
         {
-            Nodes.Clear();
+            ApplyNodes(ScanSnapshot());
+            EnsureWatching();
+        }
 
-            if (!Directory.Exists(_workspaceRoot)) return;
+        public List<DirectoryNode> ScanSnapshot()
+        {
+            var nodes = new List<DirectoryNode>();
+
+            if (!Directory.Exists(_workspaceRoot)) return nodes;
 
             // 遍历一级子目录，跳过 tools\ 和隐藏目录（如 .vscode）
             var dirs = Directory.GetDirectories(_workspaceRoot)
@@ -39,27 +45,32 @@ namespace AlgoRunner.Services
 
             foreach (var dir in dirs)
             {
-                var files = Directory.GetFiles(dir, "*.cpp", SearchOption.AllDirectories)
-                    .Select(f => new CppFile
-                    {
-                        FilePath    = f,
-                        DisplayName = Path.GetFileName(f),
-                        Category    = Path.GetFileName(dir)
-                    })
-                    .OrderBy(f => f.DisplayName)
-                    .ToList();
-
-                if (files.Count == 0) continue;
-
                 var node = new DirectoryNode
                 {
                     Name     = Path.GetFileName(dir),
                     FullPath = dir
                 };
-                foreach (var f in files) node.Files.Add(f);
-                Nodes.Add(node);
+
+                foreach (var algorithm in BuildAlgorithmNodes(dir))
+                    node.Algorithms.Add(algorithm);
+
+                if (node.Algorithms.Count == 0) continue;
+
+                nodes.Add(node);
             }
 
+            return nodes;
+        }
+
+        public void ApplyNodes(IEnumerable<DirectoryNode> nodes)
+        {
+            Nodes.Clear();
+            foreach (var node in nodes)
+                Nodes.Add(node);
+        }
+
+        public void EnsureWatching()
+        {
             SetupWatcher();
         }
 
@@ -80,6 +91,57 @@ namespace AlgoRunner.Services
             _watcher.Created += OnFsEvent;
             _watcher.Deleted += OnFsEvent;
             _watcher.Renamed += OnFsEvent;
+        }
+
+        private IEnumerable<AlgorithmNode> BuildAlgorithmNodes(string categoryDir)
+        {
+            var algorithms = new List<AlgorithmNode>();
+
+            foreach (var file in Directory.GetFiles(categoryDir, "*.cpp", SearchOption.TopDirectoryOnly)
+                         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            {
+                algorithms.Add(new AlgorithmNode
+                {
+                    Name     = Path.GetFileNameWithoutExtension(file),
+                    FullPath = file,
+                    Files    = new ObservableCollection<CppFile>
+                    {
+                        CreateCppFile(file, categoryDir)
+                    }
+                });
+            }
+
+            foreach (var dir in Directory.GetDirectories(categoryDir, "*", SearchOption.AllDirectories)
+                         .Where(d => Directory.GetFiles(d, "*.cpp", SearchOption.TopDirectoryOnly).Length > 0)
+                         .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+            {
+                var algorithm = new AlgorithmNode
+                {
+                    Name     = Path.GetRelativePath(categoryDir, dir).Replace('\\', '/'),
+                    FullPath = dir
+                };
+
+                foreach (var file in Directory.GetFiles(dir, "*.cpp", SearchOption.TopDirectoryOnly)
+                             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+                {
+                    algorithm.Files.Add(CreateCppFile(file, categoryDir));
+                }
+
+                if (algorithm.Files.Count > 0)
+                    algorithms.Add(algorithm);
+            }
+
+            return algorithms;
+        }
+
+        private static CppFile CreateCppFile(string filePath, string categoryDir)
+        {
+            return new CppFile
+            {
+                FilePath    = filePath,
+                DisplayName = Path.GetFileName(filePath),
+                Category    = Path.GetFileName(categoryDir)
+            };
         }
 
         private void OnFsEvent(object sender, FileSystemEventArgs e)

@@ -193,10 +193,18 @@
                 <TreeView.Resources>
                     <!-- Directory node -->
                     <HierarchicalDataTemplate DataType="{x:Type models:DirectoryNode}"
-                                              ItemsSource="{Binding Files}">
+                                              ItemsSource="{Binding Algorithms}">
                         <StackPanel Orientation="Horizontal" Margin="0,1">
                             <TextBlock Text="📂 " FontSize="13"/>
                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </HierarchicalDataTemplate>
+
+                    <HierarchicalDataTemplate DataType="{x:Type models:AlgorithmNode}"
+                                              ItemsSource="{Binding Files}">
+                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                            <TextBlock Text="🧩 " FontSize="12" Foreground="#DCDCAA"/>
+                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DCDCAA"/>
                         </StackPanel>
                     </HierarchicalDataTemplate>
 
