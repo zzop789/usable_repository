@@ -19,3 +19,9 @@ tools/AlgoRunner/obj/
 *.user
 *.suo
 .vs/
+
+# 通用本地编译产物
+*.obj
+*.exe
+*.ilk
+*.pdb

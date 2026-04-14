@@ -1,0 +1,11 @@
+id,name,desc,image_path,level
+1,绷带,基础医疗用品，用于简单止血与包扎。,assets/items/1_bandage.png,1
+2,能量饮料,短时间恢复体力，适合快速转移。,assets/items/2_energy_drink.png,1
+3,军用口粮,标准单兵补给，恢复饥饿值。,assets/items/3_ration.png,2
+4,简易工具包,可用于基础拆解与临时维修。,assets/items/4_toolkit.png,2
+5,战术手电,在黑暗区域提供稳定照明。,assets/items/5_flashlight.png,2
+6,防毒面罩,降低毒气区域中的持续伤害。,assets/items/6_gas_mask.png,3
+7,军规护甲板,提供较高的正面防护能力。,assets/items/7_armor_plate.png,3
+8,稀有数据芯片,可用于任务提交或高价值交易。,assets/items/8_data_chip.png,4
+9,加密钥匙卡,开启受限区域或高价值保险箱。,assets/items/9_keycard.png,4
+10,实验型核心模块,极其稀有的高级战利品，价值很高。,assets/items/10_core_module.png,5
